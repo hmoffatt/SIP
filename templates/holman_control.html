@@ -42,6 +42,9 @@ $var page: holman_control
 <div id="stations">
     <div class="title">$_('Holman Tap Timer Control')</div>
     <form id="holmanc" name="holmanc" action="$app_path('/holmanu')" method="get">
+
+        <p>Run time: <input type="number" min="1" max="255" id="runtime" name="runtime" value="${config['runtime']}"></p>
+
         <table id="addressList">
             <tr>
                 <th class="stationNumber">$_('Station')</th>
@@ -57,10 +60,6 @@ $var page: holman_control
                         </td>                       
                     </tr>
         </table>
-        
-            $for bid in range(gv.sd['nbrd']):
-            	<input type="hidden" id="i${bid}" name="i${bid}"/>
-        
     </form>
             <p></p>
 </div>

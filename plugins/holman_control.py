@@ -1,12 +1,10 @@
 #!/usr/bin/env python
+from __future__ import print_function
 
 from blinker import signal
-
-# import urllib
-# import urllib2
-
 import subprocess
 import web, json, time
+from threading import Thread
 import gv  # Get access to SIP's settings, gv = global variables
 from urls import urls  # Get access to SIP's URLs
 from sip import template_render
@@ -14,6 +12,7 @@ from webpages import ProtectedPage
 
 gv.use_gpio_pins = False  # Signal SIP to not use GPIO pins
 
+json_data = './data/holman_control.json'
 
 # Add a new url to open the data entry page.
 urls.extend(['/holman', 'plugins.holman_control.settings',
@@ -23,60 +22,65 @@ urls.extend(['/holman', 'plugins.holman_control.settings',
 # Add this plugin to the plugins menu
 gv.plugin_menu.append(['Holman Timer Control', '/holman'])
 
-config = {}
-prior = [0] * len(gv.srvals)
 
-# Read in the parameters for this plugin from its JSON file
-def load_params():
-    global config
-    try:
-        with open('./data/holman_control.json', 'r') as f:  # Read the settings from file
-            config = json.load(f)
-    except IOError: #  If file does not exist create file with defaults.
-        config = {
-            "mac": [
-    	       "f7:52:49:38:b8:e0",
-            	"",
-            	"",
-            	"",
-            	"",
-            	"",
-            	"",
-            	"" 
-            ],
-        } 
+class HolmanController(Thread):
 
-        with open('./data/holman_control.json', 'w') as f:
-            json.dump(config, f, indent=4)
-    return
+    def __init__(self, gv):
+        Thread.__init__(self)
+        self.gv = gv
+        self.daemon = True
+        self.config = {}
+        self.prior = [0] * len(gv.srvals)
+        self.load_params()
 
-load_params()
+        zones = signal('zone_change')
+        zones.connect(self.on_zone_change)
 
-#### output command when signal received ####
-def on_zone_change(name, **kw):
-    """ Switch relays when core program signals a change in station state."""
-    global prior
-#     print 'change signaled'
-#     print prior
-#     print gv.srvals
-    if gv.srvals != prior: # check for a change   
-        for i in range(len(gv.srvals)):
-            if gv.srvals[i] != prior[i]: #  this station has changed
-                if gv.srvals[i]: # station is on
-# 					command = "wget http://xxx.xxx.xxx.xxx/relay1on"
-                    command = commands['on'][i]
-                    if command:
-                    	subprocess.call(command.split())
-                else:              	
-	                command = commands['off'][i]
-	                if command:	                	
-						subprocess.call(command.split())                 
-        prior = gv.srvals[:]
-    return
+        self.start()
+
+    def load_params(self):
+        # Read in the parameters for this plugin from its JSON file
+        try:
+            with open(json_data, 'r') as f:  # Read the settings from file
+                self.config = json.load(f)
+        except IOError: #  If file does not exist create file with defaults.
+            self.config = {
+                "runtime": 40,
+                "mac": [
+        	       "f7:52:49:38:b8:e0",
+                	"",
+                	"",
+                	"",
+                	"",
+                	"",
+                	"",
+                	"" 
+                ],
+            } 
+
+            with open(json_data, 'w') as f:
+                json.dump(self.config, f, indent=4)
 
 
-zones = signal('zone_change')
-zones.connect(on_zone_change)
+    def on_zone_change(self, name, **kw):
+        """ Switch relays when core program signals a change in station state."""
+        if self.gv.srvals != self.prior: # check for a change   
+            for i in range(len(self.gv.srvals)):
+                if self.gv.srvals[i] != self.prior[i]: #  this station has changed
+                    if self.gv.srvals[i]: # station is on
+                        print('switching on station %d mac %s' % (i, self.config['mac'][i]))
+                    else:
+                        print('switching off station %d mac %s' % (i, self.config['mac'][i]))
+
+            self.prior = self.gv.srvals[:]
+
+    def run(self):
+        while True:
+            time.sleep(1)
+
+
+controller = HolmanController(gv)
+
 
 ################################################################################
 # Web pages:                                                                   #
@@ -86,7 +90,7 @@ class settings(ProtectedPage):
     """Load an html page for entering cli_control commands"""
 
     def GET(self):
-        with open('./data/holman_control.json', 'r') as f:  # Read the settings from file
+        with open(json_data, 'r') as f:  # Read the settings from file
             config = json.load(f)
         return template_render.holman_control(config)
 
@@ -97,7 +101,7 @@ class settings_json(ProtectedPage):
     def GET(self):
         web.header('Access-Control-Allow-Origin', '*')
         web.header('Content-Type', 'application/json')
-        return json.dumps(config)
+        return json.dumps(controller.config)
 
 
 class update(ProtectedPage):
@@ -109,8 +113,8 @@ class update(ProtectedPage):
 
         for i in range(gv.sd['nst']):
             config['mac'].append(qdict['mac'+str(i)])
+        config['runtime'] = int(qdict['runtime'])
         	
-#         print 'new commands: ', commands
-        with open('./data/holman_control.json', 'w') as f:  # write the settings to file
+        with open(json_data, 'w') as f:  # write the settings to file
           	json.dump(config, f, indent=4)
         raise web.seeother('/')
