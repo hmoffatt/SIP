@@ -42,7 +42,13 @@ class HolmanController(Thread):
         # Establish initial state
         for station, value in enumerate(self.gv.srvals):
             if self.config['mac'][station]:
-                self.control_timer(station, self.config['runtime'] if value else 0)
+
+                for retry in range(3):
+                    if self.control_timer(station, self.config['runtime'] if value else 0):
+                        break
+                    else:
+                        print('retrying')
+                        time.sleep(10)
 
         self.start()
 
@@ -78,8 +84,10 @@ class HolmanController(Thread):
         try:
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
             sock.sendto(message, holman_socket)
+            return True
         except socket.error:
             print('failed to communicate with holman socket')
+            return False
 
     def on_zone_change(self, name, **kw):
         """ Switch relays when core program signals a change in station state."""
