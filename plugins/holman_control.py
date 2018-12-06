@@ -3,7 +3,7 @@ from __future__ import print_function
 
 from blinker import signal
 import subprocess
-import web, json, time
+import web, json, time, math
 from threading import Thread
 import socket
 import gv  # Get access to SIP's settings, gv = global variables
@@ -95,8 +95,15 @@ class HolmanController(Thread):
             for i in range(len(self.gv.srvals)):
                 if self.gv.srvals[i] != self.prior[i]: #  this station has changed
                     if self.gv.srvals[i]: # station is on
-                        print('switching on station %d mac %s' % (i, self.config['mac'][i]))
-                        self.control_timer(i, self.config['runtime'])
+                        # Get interval from schedule
+                        seconds = gv.rs[i][2]
+                        # Convert to minutes, add some extra and allow the off event
+                        # from the scheduler to switch it off instead
+                        minutes = int(math.ceil((seconds + 60) / 60.))
+                        # Limit to 255 minutes
+                        minutes = min(minutes, 255)
+                        print('switching on station %d mac %s for %d minutes' % (i, self.config['mac'][i], minutes))
+                        self.control_timer(i, minutes)
                     else:
                         print('switching off station %d mac %s' % (i, self.config['mac'][i]))
                         self.control_timer(i, 0)
@@ -105,8 +112,8 @@ class HolmanController(Thread):
 
     def run(self):
         while True:
-            time.sleep(1)
-            # check if timer needs to be renewed
+            # Do something useful here?
+            time.sleep(3600)
 
 
 controller = HolmanController(gv)
