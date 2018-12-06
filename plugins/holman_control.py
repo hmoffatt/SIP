@@ -42,13 +42,10 @@ class HolmanController(Thread):
         # Establish initial state
         for station, value in enumerate(self.gv.srvals):
             if self.config['mac'][station]:
-
-                for retry in range(3):
-                    if self.control_timer(station, self.config['runtime'] if value else 0):
-                        break
-                    else:
-                        print('retrying')
-                        time.sleep(10)
+                if value:
+                    self.start_timer(station)
+                else:
+                    self.stop_timer(station)
 
         self.start()
 
@@ -59,7 +56,6 @@ class HolmanController(Thread):
                 self.config = json.load(f)
         except IOError: #  If file does not exist create file with defaults.
             self.config = {
-                "runtime": 40,
                 "mac": [
         	       "f7:52:49:38:b8:e0",
                 	"",
@@ -75,19 +71,41 @@ class HolmanController(Thread):
             with open(json_data, 'w') as f:
                 json.dump(self.config, f, indent=4)
 
-    def control_timer(self, station, runtime):
+    def control_timer(self, station, runtime, retries=3):
         message = json.dumps({
             "mac": self.config['mac'][station],
             "runtime": runtime,
         })
 
-        try:
-            sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-            sock.sendto(message, holman_socket)
-            return True
-        except socket.error:
-            print('failed to communicate with holman socket')
-            return False
+        success = False
+        for retry in range(retries):
+            try:
+                sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+                sock.sendto(message, holman_socket)
+                success = True
+                break
+
+            except socket.error:
+                print('failed to communicate with holman socket, retrying after delay')
+                time.sleep(10)
+
+        return success
+
+
+    def start_timer(self, station):
+        # Get interval from schedule
+        seconds = gv.rs[station][2]
+        # Convert to minutes, add some extra and allow the off event
+        # from the scheduler to switch it off instead
+        minutes = int(math.ceil((seconds + 60) / 60.))
+        # Limit to 255 minutes
+        minutes = min(minutes, 255)
+        print('switching on station %d mac %s for %d minutes' % (station, self.config['mac'][station], minutes))
+        return self.control_timer(station, minutes)
+
+    def stop_timer(self, station):
+        print('switching off station %d mac %s' % (station, self.config['mac'][station]))
+        return self.control_timer(station, 0)
 
     def on_zone_change(self, name, **kw):
         """ Switch relays when core program signals a change in station state."""
@@ -95,18 +113,9 @@ class HolmanController(Thread):
             for i in range(len(self.gv.srvals)):
                 if self.gv.srvals[i] != self.prior[i]: #  this station has changed
                     if self.gv.srvals[i]: # station is on
-                        # Get interval from schedule
-                        seconds = gv.rs[i][2]
-                        # Convert to minutes, add some extra and allow the off event
-                        # from the scheduler to switch it off instead
-                        minutes = int(math.ceil((seconds + 60) / 60.))
-                        # Limit to 255 minutes
-                        minutes = min(minutes, 255)
-                        print('switching on station %d mac %s for %d minutes' % (i, self.config['mac'][i], minutes))
-                        self.control_timer(i, minutes)
+                        self.start_timer(i)
                     else:
-                        print('switching off station %d mac %s' % (i, self.config['mac'][i]))
-                        self.control_timer(i, 0)
+                        self.stop_timer(i)
 
             self.prior = self.gv.srvals[:]
 
@@ -150,7 +159,6 @@ class update(ProtectedPage):
 
         for i in range(gv.sd['nst']):
             config['mac'].append(qdict['mac'+str(i)])
-        config['runtime'] = int(qdict['runtime'])
 
         with open(json_data, 'w') as f:  # write the settings to file
           	json.dump(config, f, indent=4)
