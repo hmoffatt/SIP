@@ -39,8 +39,6 @@ class HolmanController(Thread):
         zones = signal('zone_change')
         zones.connect(self.on_zone_change)
 
-        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-
         # Establish initial state
         for station, value in enumerate(self.gv.srvals):
             if self.config['mac'][station]:
@@ -78,7 +76,8 @@ class HolmanController(Thread):
         })
 
         try:
-            self.sock.sendto(message, holman_socket)
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+            sock.sendto(message, holman_socket)
         except socket.error:
             print('failed to communicate with holman socket')
 
