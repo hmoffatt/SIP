@@ -111,11 +111,15 @@ class HolmanController(Thread):
         """ Switch relays when core program signals a change in station state."""
         if self.gv.srvals != self.prior: # check for a change   
             for i in range(len(self.gv.srvals)):
-                if self.gv.srvals[i] != self.prior[i]: #  this station has changed
-                    if self.gv.srvals[i]: # station is on
-                        self.start_timer(i)
-                    else:
-                        self.stop_timer(i)
+                if self.config['mac'][i]: # this station is enabled
+                    if self.gv.srvals[i] != self.prior[i]: #  this station has changed
+                        if self.gv.srvals[i]: # station is on
+                            self.start_timer(i)
+                        else:
+                            self.stop_timer(i)
+
+                else:
+                    print('station %d has no Holman configured' % i)
 
             self.prior = self.gv.srvals[:]
 
