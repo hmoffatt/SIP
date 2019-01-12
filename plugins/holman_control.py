@@ -20,8 +20,8 @@ holman_socket = '/run/holman.sock'
 
 # Add a new url to open the data entry page.
 urls.extend(['/holman', 'plugins.holman_control.settings',
-	'/holmanj', 'plugins.holman_control.settings_json',
-	'/holmanu', 'plugins.holman_control.update']) 
+    '/holmanj', 'plugins.holman_control.settings_json',
+    '/holmanu', 'plugins.holman_control.update']) 
 
 # Add this plugin to the plugins menu
 gv.plugin_menu.append(['Holman Timer Control', '/holman'])
@@ -57,14 +57,14 @@ class HolmanController(Thread):
         except IOError: #  If file does not exist create file with defaults.
             self.config = {
                 "mac": [
-        	       "f7:52:49:38:b8:e0",
-                	"",
-                	"",
-                	"",
-                	"",
-                	"",
-                	"",
-                	"" 
+                    "f7:52:49:38:b8:e0",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "" 
                 ],
             } 
 
@@ -161,5 +161,5 @@ class update(ProtectedPage):
             config['mac'].append(qdict['mac'+str(i)])
 
         with open(json_data, 'w') as f:  # write the settings to file
-          	json.dump(config, f, indent=4)
+            json.dump(config, f, indent=4)
         raise web.seeother('/')
